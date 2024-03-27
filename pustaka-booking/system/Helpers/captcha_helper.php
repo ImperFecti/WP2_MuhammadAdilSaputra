@@ -6,7 +6,7 @@
  *
  * This content is released under the MIT License (MIT)
  *
- * Copyright (c) 2019 - 2022, CodeIgniter Foundation
+ * Copyright (c) 2014 - 2015, British Columbia Institute of Technology
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,11 +28,10 @@
  *
  * @package	CodeIgniter
  * @author	EllisLab Dev Team
- * @copyright	Copyright (c) 2008 - 2014, EllisLab, Inc. (https://ellislab.com/)
- * @copyright	Copyright (c) 2014 - 2019, British Columbia Institute of Technology (https://bcit.ca/)
- * @copyright	Copyright (c) 2019 - 2022, CodeIgniter Foundation (https://codeigniter.com/)
- * @license	https://opensource.org/licenses/MIT	MIT License
- * @link	https://codeigniter.com
+ * @copyright	Copyright (c) 2008 - 2014, EllisLab, Inc. (http://ellislab.com/)
+ * @copyright	Copyright (c) 2014 - 2015, British Columbia Institute of Technology (http://bcit.ca/)
+ * @license	http://opensource.org/licenses/MIT	MIT License
+ * @link	http://codeigniter.com
  * @since	Version 1.0.0
  * @filesource
  */
@@ -45,7 +44,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * @subpackage	Helpers
  * @category	Helpers
  * @author		EllisLab Dev Team
- * @link		https://codeigniter.com/userguide3/helpers/captcha_helper.html
+ * @link		http://codeigniter.com/user_guide/helpers/captcha_helper.html
  */
 
 // ------------------------------------------------------------------------
@@ -55,10 +54,13 @@ if ( ! function_exists('create_captcha'))
 	/**
 	 * Create CAPTCHA
 	 *
-	 * @param	array	$data	Data for the CAPTCHA
-	 * @return	array
+	 * @param	array	$data		data for the CAPTCHA
+	 * @param	string	$img_path	path to create the image in
+	 * @param	string	$img_url	URL to the CAPTCHA image folder
+	 * @param	string	$font_path	server path to font
+	 * @return	string
 	 */
-	function create_captcha($data)
+	function create_captcha($data = '', $img_path = '', $img_url = '', $font_path = '')
 	{
 		$defaults = array(
 			'word'		=> '',
@@ -66,12 +68,10 @@ if ( ! function_exists('create_captcha'))
 			'img_url'	=> '',
 			'img_width'	=> '150',
 			'img_height'	=> '30',
-			'img_alt'	=> 'captcha',
-			'img_class'	=> '',
 			'font_path'	=> '',
-			'font_size'	=> 16,
 			'expiration'	=> 7200,
 			'word_length'	=> 8,
+			'font_size'	=> 16,
 			'img_id'	=> '',
 			'pool'		=> '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
 			'colors'	=> array(
@@ -81,8 +81,6 @@ if ( ! function_exists('create_captcha'))
 				'grid'		=> array(255,182,182)
 			)
 		);
-
-		$now = microtime(TRUE);
 
 		foreach ($defaults as $key => $val)
 		{
@@ -96,59 +94,29 @@ if ( ! function_exists('create_captcha'))
 			}
 		}
 
-		if ( ! extension_loaded('gd'))
+		if ($img_path === '' OR $img_url === ''
+			OR ! is_dir($img_path) OR ! is_really_writable($img_path)
+			OR ! extension_loaded('gd'))
 		{
-			log_message('error', 'create_captcha(): GD extension is not loaded.');
 			return FALSE;
 		}
 
-		if ($img_path === '' OR $img_url === '')
-		{
-			log_message('error', 'create_captcha(): img_path and img_url are required.');
-			return FALSE;
-		}
+		// -----------------------------------
+		// Remove old images
+		// -----------------------------------
 
-		if ( ! is_dir($img_path) OR ! is_really_writable($img_path))
-		{
-			log_message('error', "create_captcha(): '{$img_path}' is not a dir, nor is it writable.");
-			return FALSE;
-		}
+		$now = microtime(TRUE);
 
-		if ($img_url !== '' OR $img_path !== '')
+		$current_dir = @opendir($img_path);
+		while ($filename = @readdir($current_dir))
 		{
-			if ($img_path === '' OR $img_url === '')
+			if (substr($filename, -4) === '.jpg' && (str_replace('.jpg', '', $filename) + $expiration) < $now)
 			{
-				log_message('error', 'create_captcha(): $img_path and $img_url are required.');
-				return FALSE;
+				@unlink($img_path.$filename);
 			}
-
-			if ( ! is_dir($img_path) OR ! is_really_writable($img_path))
-			{
-				log_message('error', "create_captcha(): '{$img_path}' is not a dir, nor is it writable.");
-				return FALSE;
-			}
-
-			/**
-			 * Remove old images
-			 */
-			$current_dir = @opendir($img_path);
-			while ($filename = @readdir($current_dir))
-			{
-				if (preg_match('#^(?<ts>\d{10})\.png$#', $filename, $match) && ($match['ts'] + $expiration) < $now)
-				{
-					@unlink($img_path.$filename);
-				}
-			}
-
-			@closedir($current_dir);
-
-			// This variable will later be used later to determine whether we write to disk or output a data:image URI
-			$img_filename = $now.'.png';
 		}
-		else
-		{
-			$img_filename = NULL;
-		}
+
+		@closedir($current_dir);
 
 		// -----------------------------------
 		// Do we have a "word" yet?
@@ -203,36 +171,34 @@ if ( ! function_exists('create_captcha'))
 				$byte_index = $word_index = 0;
 				while ($word_index < $word_length)
 				{
-					// Do we have more random data to use?
-					// It could be exhausted by previous iterations
-					// ignoring bytes higher than $rand_max.
-					if ($byte_index === $pool_length)
+					if (($rand_index = unpack('C', $bytes[$byte_index++])) > $rand_max)
 					{
-						// No failures should be possible if the
-						// first get_random_bytes() call didn't
-						// return FALSE, but still ...
-						for ($i = 0; $i < 5; $i++)
+						// Was this the last byte we have?
+						// If so, try to fetch more.
+						if ($byte_index === $pool_length)
 						{
-							if (($bytes = $security->get_random_bytes($pool_length)) === FALSE)
+							// No failures should be possible if
+							// the first get_random_bytes() call
+							// didn't return FALSE, but still ...
+							for ($i = 0; $i < 5; $i++)
 							{
-								continue;
+								if (($bytes = $security->get_random_bytes($pool_length)) === FALSE)
+								{
+									continue;
+								}
+
+								$byte_index = 0;
+								break;
 							}
 
-							$byte_index = 0;
-							break;
+							if ($bytes === FALSE)
+							{
+								// Sadly, this means fallback to mt_rand()
+								$word = '';
+								break;
+							}
 						}
 
-						if ($bytes === FALSE)
-						{
-							// Sadly, this means fallback to mt_rand()
-							$word = '';
-							break;
-						}
-					}
-
-					list(, $rand_index) = unpack('C', $bytes[$byte_index++]);
-					if ($rand_index > $rand_max)
-					{
 						continue;
 					}
 
@@ -258,8 +224,8 @@ if ( ! function_exists('create_captcha'))
 		// Determine angle and position
 		// -----------------------------------
 		$length	= strlen($word);
-		$angle	= ($length >= 6) ? mt_rand(-($length - 6), ($length - 6)) : 0;
-		$x_axis	= mt_rand(6, (360 / $length)-16);
+		$angle	= ($length >= 6) ? mt_rand(-($length-6), ($length-6)) : 0;
+		$x_axis	= mt_rand(6, (360/$length)-16);
 		$y_axis = ($angle >= 0) ? mt_rand($img_height, $img_width) : mt_rand(6, $img_height);
 
 		// Create image
@@ -297,12 +263,12 @@ if ( ! function_exists('create_captcha'))
 		{
 			$theta += $thetac;
 			$rad = $radius * ($i / $points);
-			$x = round(($rad * cos($theta)) + $x_axis);
-			$y = round(($rad * sin($theta)) + $y_axis);
+			$x = ($rad * cos($theta)) + $x_axis;
+			$y = ($rad * sin($theta)) + $y_axis;
 			$theta += $thetac;
 			$rad1 = $radius * (($i + 1) / $points);
-			$x1 = round(($rad1 * cos($theta)) + $x_axis);
-			$y1 = round(($rad1 * sin($theta)) + $y_axis);
+			$x1 = ($rad1 * cos($theta)) + $x_axis;
+			$y1 = ($rad1 * sin($theta)) + $y_axis;
 			imageline($im, $x, $y, $x1, $y1, $colors['grid']);
 			$theta -= $thetac;
 		}
@@ -347,34 +313,24 @@ if ( ! function_exists('create_captcha'))
 		// -----------------------------------
 		//  Generate the image
 		// -----------------------------------
+		$img_url = rtrim($img_url, '/').'/';
 
-		if (isset($img_filename))
+		if (function_exists('imagejpeg'))
 		{
-			$img_src = rtrim($img_url, '/').'/'.$img_filename;
+			$img_filename = $now.'.jpg';
+			imagejpeg($im, $img_path.$img_filename);
+		}
+		elseif (function_exists('imagepng'))
+		{
+			$img_filename = $now.'.png';
 			imagepng($im, $img_path.$img_filename);
 		}
 		else
 		{
-			// I don't see an easier way to get the image contents without writing to file
-			$buffer = fopen('php://memory', 'wb+');
-			imagepng($im, $buffer);
-			rewind($buffer);
-			$img_src = '';
-
-			// fread() will return an empty string (not FALSE) after the entire contents are read
-			while (strlen($read = fread($buffer, 4096)))
-			{
-				$img_src .= $read;
-			}
-
-			fclose($buffer);
-			$img_src = 'data:image/png;base64,'.base64_encode($img_src);
+			return FALSE;
 		}
 
-		$img_class = trim($img_class);
-		$img_class = (bool) strlen($img_class) ? 'class="'.$img_class.'" ' : '';
-
-		$img = '<img '.($img_id === '' ? '' : 'id="'.$img_id.'"').' src="'.$img_src.'" style="width: '.$img_width.'px; height: '.$img_height .'px; border: 0;" '.$img_class.'alt="'.$img_alt.'" />';
+		$img = '<img '.($img_id === '' ? '' : 'id="'.$img_id.'"').' src="'.$img_url.$img_filename.'" style="width: '.$img_width.'; height: '.$img_height .'; border: 0;" alt=" " />';
 		ImageDestroy($im);
 
 		return array('word' => $word, 'time' => $now, 'image' => $img, 'filename' => $img_filename);
