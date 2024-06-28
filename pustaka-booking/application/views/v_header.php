@@ -3,13 +3,13 @@
 
 
 <head>
-    <meta charset ="utf=8">
+    <meta charset="utf=8">
     <title> WEB PROG II | Merancang template dengan codeigniter</title>
-        <link rel="stylesheet" type="text/css" href="<?php echo base_url() ?>assets/stylebuku.css">
+    <link rel="stylesheet" type="text/css" href="<?php echo base_url() ?>assets/stylebuku.css">
 </head>
 
 <body>
-    <div id = "wrapper">
+    <div id="wrapper">
         <header>
             <hgroup>
                 <h1>rentalBuku.net</h1>
@@ -19,7 +19,7 @@
                 <ul>
                     <li><a hrev="<?php echo base_url() . 'index.php/web' ?>">home</a></li>
                     <li><a hrev="<?php echo base_url() . 'index.php/web/about' ?>">about</a></li>
-                <ul>
+                    <ul>
             </nav>
             <div class="clear"></div>
         </header>
